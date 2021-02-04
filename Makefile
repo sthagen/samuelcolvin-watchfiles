@@ -1,21 +1,32 @@
 .DEFAULT_GOAL := all
-isort = isort -rc watchgod tests
+isort = isort watchgod tests
+black = black -S -l 120 --target-version py38 watchgod tests
 
 .PHONY: install
 install:
-	pip install -U setuptools pip
+	pip install -U pip wheel
 	pip install -r tests/requirements.txt
 	pip install -U .
+
+.PHONY: install-all
+install-all: install
+	pip install -r tests/requirements-linting.txt
 
 .PHONY: isort
 format:
 	$(isort)
+	$(black)
 
 .PHONY: lint
 lint:
 	python setup.py check -ms
 	flake8 watchgod/ tests/
-	$(isort) --check-only
+	$(isort) --check-only --df
+	$(black) --check --diff
+
+.PHONY: mypy
+mypy:
+	mypy watchgod
 
 .PHONY: test
 test:
@@ -27,7 +38,7 @@ testcov: test
 	@coverage html
 
 .PHONY: all
-all: lint testcov
+all: lint mypy testcov
 
 .PHONY: clean
 clean:

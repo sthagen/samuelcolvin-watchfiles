@@ -1,12 +1,17 @@
 import asyncio
 import re
+import sys
 import threading
 from time import sleep
 
+import pytest
 from pytest_toolbox import mktree
 
 from watchgod import AllWatcher, Change, DefaultWatcher, PythonWatcher, RegExpWatcher, awatch, watch
 
+pytestmark = pytest.mark.asyncio
+skip_on_windows = pytest.mark.skipif(sys.platform == 'win32', reason='fails on windows')
+skip_unless_linux = pytest.mark.skipif(sys.platform != 'linux', reason='test only on linux')
 tree = {
     'foo': {
         'bar.txt': 'bar',
@@ -17,7 +22,7 @@ tree = {
         },
         '.git': {
             'x': 'y',
-        }
+        },
     }
 }
 
@@ -55,6 +60,54 @@ def test_modify(tmpdir):
     tmpdir.join('foo/bar.txt').write('foobar')
 
     assert watcher.check() == {(Change.modified, str(tmpdir.join('foo/bar.txt')))}
+
+
+@skip_on_windows
+def test_ignore_root(tmpdir):
+    mktree(tmpdir, tree)
+    watcher = AllWatcher(str(tmpdir), ignored_paths={tmpdir.join('foo')})
+
+    assert watcher.check() == set()
+
+    sleep(0.01)
+    tmpdir.join('foo/bar.txt').write('foobar')
+
+    assert watcher.check() == set()
+
+
+@skip_on_windows
+def test_ignore_file_path(tmpdir):
+    mktree(tmpdir, tree)
+    watcher = AllWatcher(str(tmpdir), ignored_paths={tmpdir.join('foo', 'bar.txt')})
+
+    assert watcher.check() == set()
+
+    sleep(0.01)
+    tmpdir.join('foo', 'bar.txt').write('foobar')
+    tmpdir.join('foo', 'new_not_ignored.txt').write('foobar')
+    tmpdir.join('foo', 'spam.py').write('foobar')
+
+    assert watcher.check() == {
+        (Change.added, tmpdir.join('foo', 'new_not_ignored.txt')),
+        (Change.modified, tmpdir.join('foo', 'spam.py')),
+    }
+
+
+@skip_on_windows
+def test_ignore_subdir(tmpdir):
+    mktree(tmpdir, tree)
+    watcher = AllWatcher(str(tmpdir), ignored_paths={tmpdir.join('dir', 'ignored')})
+    assert watcher.check() == set()
+
+    sleep(0.01)
+    tmpdir.mkdir('dir')
+    tmpdir.mkdir('dir', 'ignored')
+    tmpdir.mkdir('dir', 'not_ignored')
+
+    tmpdir.join('dir', 'ignored', 'file.txt').write('content')
+    tmpdir.join('dir', 'not_ignored', 'file.txt').write('content')
+
+    assert watcher.check() == {(Change.added, tmpdir.join('dir', 'not_ignored', 'file.txt'))}
 
 
 def test_modify_watched_file(tmpdir):
@@ -150,7 +203,7 @@ def test_regexp(tmpdir):
     assert watcher.check() == {
         (Change.modified, str(tmpdir.join('foo/bar.txt'))),
         (Change.added, str(tmpdir.join('foo/borec.txt'))),
-        (Change.added, str(tmpdir.join('foo/borec-js.js')))
+        (Change.added, str(tmpdir.join('foo/borec-js.js'))),
     }
 
 
@@ -170,7 +223,7 @@ def test_regexp_no_re_dirs(tmpdir):
 
     assert watcher_no_re_dirs.check() == {
         (Change.modified, str(tmpdir.join('foo/bar.txt'))),
-        (Change.added, str(tmpdir.join('foo/recursive_dir/foo.js')))
+        (Change.added, str(tmpdir.join('foo/recursive_dir/foo.js'))),
     }
 
 
@@ -190,7 +243,7 @@ def test_regexp_no_re_files(tmpdir):
 
     assert watcher_no_re_files.check() == {
         (Change.modified, str(tmpdir.join('foo/spam.py'))),
-        (Change.modified, str(tmpdir.join('foo/bar.txt')))
+        (Change.modified, str(tmpdir.join('foo/bar.txt'))),
     }
 
 
@@ -209,24 +262,28 @@ def test_regexp_no_args(tmpdir):
     assert watcher_no_args.check() == {
         (Change.modified, str(tmpdir.join('foo/spam.py'))),
         (Change.modified, str(tmpdir.join('foo/bar.txt'))),
-        (Change.added, str(tmpdir.join('foo/recursive_dir/foo.js')))
+        (Change.added, str(tmpdir.join('foo/recursive_dir/foo.js'))),
     }
 
 
-def test_does_not_exist(caplog):
-    AllWatcher('/foo/bar')
-    assert "error walking file system: FileNotFoundError [Errno 2] No such file or directory: '/foo/bar'" in caplog.text
+@skip_on_windows
+def test_does_not_exist(caplog, tmp_path):
+    p = str(tmp_path / 'missing')
+    AllWatcher(p)
+    assert f"error walking file system: FileNotFoundError [Errno 2] No such file or directory: '{p}'" in caplog.text
 
 
 def test_watch(mocker):
     class FakeWatcher:
         def __init__(self, path):
-            self._results = iter([
-                {'r1'},
-                set(),
-                {'r2'},
-                set(),
-            ])
+            self._results = iter(
+                [
+                    {'r1'},
+                    set(),
+                    {'r2'},
+                    set(),
+                ]
+            )
 
         def check(self):
             return next(self._results)
@@ -239,12 +296,14 @@ def test_watch(mocker):
 def test_watch_watcher_kwargs(mocker):
     class FakeWatcher:
         def __init__(self, path, arg1=None, arg2=None):
-            self._results = iter([
-                {arg1},
-                set(),
-                {arg2},
-                set(),
-            ])
+            self._results = iter(
+                [
+                    {arg1},
+                    set(),
+                    {arg2},
+                    set(),
+                ]
+            )
 
         def check(self):
             return next(self._results)
@@ -259,11 +318,13 @@ def test_watch_watcher_kwargs(mocker):
 def test_watch_stop():
     class FakeWatcher:
         def __init__(self, path):
-            self._results = iter([
-                {'r1'},
-                set(),
-                {'r2'},
-            ])
+            self._results = iter(
+                [
+                    {'r1'},
+                    set(),
+                    {'r2'},
+                ]
+            )
 
         def check(self):
             return next(self._results)
@@ -308,14 +369,16 @@ def test_watch_log(mocker, caplog):
 async def test_awatch(mocker):
     class FakeWatcher:
         def __init__(self, path):
-            self._results = iter([
-                set(),
-                set(),
-                {'r1'},
-                set(),
-                {'r2'},
-                set(),
-            ])
+            self._results = iter(
+                [
+                    set(),
+                    set(),
+                    {'r1'},
+                    set(),
+                    {'r2'},
+                    set(),
+                ]
+            )
 
         def check(self):
             return next(self._results)
@@ -331,11 +394,13 @@ async def test_awatch(mocker):
 async def test_awatch_stop():
     class FakeWatcher:
         def __init__(self, path):
-            self._results = iter([
-                {'r1'},
-                set(),
-                {'r2'},
-            ])
+            self._results = iter(
+                [
+                    {'r1'},
+                    set(),
+                    {'r2'},
+                ]
+            )
 
         def check(self):
             return next(self._results)
@@ -348,6 +413,7 @@ async def test_awatch_stop():
     assert ans == []
 
 
+@skip_unless_linux
 async def test_awatch_log(mocker, caplog):
     mock_log_enabled = mocker.patch('watchgod.main.logger.isEnabledFor')
     mock_log_enabled.return_value = True
@@ -363,5 +429,6 @@ async def test_awatch_log(mocker, caplog):
         assert v == {'r1'}
         break
 
+    print(caplog.text)
     assert caplog.text.count('DEBUG') > 3
     assert 'xxx time=Xms debounced=Xms files=3 changes=1 (1)' in re.sub(r'\dms', 'Xms', caplog.text)
