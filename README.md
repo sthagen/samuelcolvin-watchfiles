@@ -40,6 +40,12 @@ If you need notifications about change events as well as to restart a process yo
 use the `callback` argument to pass a function which will be called on every file change
 with one argument: the set of file changes.
 
+## Installation
+
+```bash
+pip install watchgod
+```
+
 ## Asynchronous Methods
 
 *watchgod* comes with an asynchronous equivalents of `watch`: `awatch` which uses
@@ -53,8 +59,7 @@ async def main():
     async for changes in awatch('/path/to/dir'):
         print(changes)
 
-loop = asyncio.get_event_loop()
-loop.run_until_complete(main())
+asyncio.run(main())
 ```
 
 There's also an asynchronous equivalents of `run_process`: `arun_process` which in turn
@@ -70,8 +75,7 @@ def foobar(a, b, c):
 async def main():
     await arun_process('./path/to/dir', foobar, args=(1, 2, 3))
 
-loop = asyncio.get_event_loop()
-loop.run_until_complete(main())
+asyncio.run(main())
 ```
 
 `arun_process` uses `PythonWatcher` so only changes to python files will prompt a
@@ -140,7 +144,7 @@ You could run this and reload it when any file in the current directory changes 
     watchgod foobar.main
 
 In case you need to ignore certain files or directories, you can use the argument
- `--ignore-paths`. 
+ `--ignore-paths`.
 
 Run `watchgod --help` for more options. *watchgod* is also available as a python executable module
 via `python -m watchgod ...`.

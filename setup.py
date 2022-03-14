@@ -1,5 +1,6 @@
 from importlib.machinery import SourceFileLoader
 from pathlib import Path
+
 from setuptools import setup
 
 THIS_DIR = Path(__file__).resolve().parent
@@ -20,10 +21,10 @@ setup(
         'Programming Language :: Python',
         'Programming Language :: Python :: 3',
         'Programming Language :: Python :: 3 :: Only',
-        'Programming Language :: Python :: 3.6',
         'Programming Language :: Python :: 3.7',
         'Programming Language :: Python :: 3.8',
         'Programming Language :: Python :: 3.9',
+        'Programming Language :: Python :: 3.10',
         'Intended Audience :: Developers',
         'Intended Audience :: Information Technology',
         'Intended Audience :: System Administrators',
@@ -34,6 +35,7 @@ setup(
         'Environment :: MacOS X',
         'Topic :: Software Development :: Libraries :: Python Modules',
         'Topic :: System :: Filesystems',
+        'Framework :: AnyIO',
     ],
     author='Samuel Colvin',
     author_email='s@muelcolvin.com',
@@ -45,6 +47,7 @@ setup(
     license='MIT',
     packages=['watchgod'],
     package_data={'watchgod': ['py.typed']},
-    python_requires='>=3.6',
+    install_requires=['anyio>=3.0.0,<4'],
+    python_requires='>=3.7',
     zip_safe=True,
 )
