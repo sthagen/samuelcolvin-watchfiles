@@ -14,5 +14,7 @@ docs/_build/
 /.pytest_cache/
 /sandbox/
 /foobar.py
-/watchgod/*.so
+/watchfiles/*.so
 /target/
+/site/
+.rustfmt.toml
