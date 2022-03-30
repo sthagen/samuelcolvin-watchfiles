@@ -1,4 +1,3 @@
-import logging
 import sys
 from contextlib import contextmanager
 from pathlib import Path
@@ -59,21 +58,36 @@ def mock_open_signal_receiver(signal):
 
 
 @pytest.mark.skipif(sys.platform == 'win32', reason='fails on windows')
-async def test_awatch_interrupt(mocker, mock_rust_notify: 'MockRustType'):
+async def test_awatch_interrupt_raise(mocker, mock_rust_notify: 'MockRustType'):
     mocker.patch('watchfiles.main.anyio.open_signal_receiver', side_effect=mock_open_signal_receiver)
     mock_rust_notify([{(1, 'foo.txt')}])
 
-    w = watch('.', raise_interrupt=True)
-    assert next(w) == {(Change.added, 'foo.txt')}
+    count = 0
     with pytest.raises(KeyboardInterrupt):
-        async for _ in awatch('.', raise_interrupt=True):
-            pass
+        async for _ in awatch('.'):
+            count += 1
+
+    assert count == 1
+
+
+@pytest.mark.skipif(sys.platform == 'win32', reason='fails on windows')
+async def test_awatch_interrupt_warning(mocker, mock_rust_notify: 'MockRustType', caplog):
+    caplog.set_level('INFO', 'watchfiles')
+    mocker.patch('watchfiles.main.anyio.open_signal_receiver', side_effect=mock_open_signal_receiver)
+    mock_rust_notify([{(1, 'foo.txt')}])
+
+    count = 0
+    async for _ in awatch('.', raise_interrupt=False):
+        count += 1
+
+    assert count == 1
+    assert 'WARNING: KeyboardInterrupt caught, stopping awatch' in caplog.text
 
 
 def test_watch_no_yield(mock_rust_notify: 'MockRustType', caplog):
     mock = mock_rust_notify([{(1, 'spam.pyc')}, {(1, 'spam.py'), (2, 'ham.txt')}])
 
-    caplog.set_level(logging.INFO, 'watchfiles')
+    caplog.set_level('INFO', 'watchfiles')
     assert next(watch('.')) == {(Change.added, 'spam.py'), (Change.modified, 'ham.txt')}
     assert mock.watch_count == 2
     assert caplog.text == 'watchfiles.main INFO: 2 changes detected\n'
@@ -82,7 +96,7 @@ def test_watch_no_yield(mock_rust_notify: 'MockRustType', caplog):
 async def test_awatch_no_yield(mock_rust_notify: 'MockRustType', caplog):
     mock = mock_rust_notify([{(1, 'spam.pyc')}, {(1, 'spam.py')}])
 
-    caplog.set_level(logging.DEBUG, 'watchfiles')
+    caplog.set_level('DEBUG', 'watchfiles')
     changes = None
     async for changes in awatch('.'):
         pass
