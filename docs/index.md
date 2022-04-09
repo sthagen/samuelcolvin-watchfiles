@@ -11,7 +11,7 @@ Simple, modern and high performance file watching and code reload in python.
 
 Underlying file system notifications are handled by the [Notify](https://github.com/notify-rs/notify) rust library.
 
-This package used to be called "watchgod", see [Migrating from watchgod](./migrating.md) for more information.
+This package was previously named "watchgod", see [Migrating from watchgod](./migrating.md) for more information.
 
 ## Usage
 
@@ -25,6 +25,9 @@ for changes in watch('./path/to/dir'):
     print(changes)
 ```
 See [`watch` docs][watchfiles.watch] for more details.
+
+`watch` (and all other methods) can watch either files or directories and can watch more than one path with
+a single instance.
 
 ```py
 title="awatch Usage"
@@ -71,21 +74,41 @@ See [`arun_process` docs][watchfiles.arun_process] for more details.
 
 **watchfiles** requires **Python 3.7** to **Python 3.10**.
 
+### From PyPI
+
+Using `pip`:
+
 ```bash
 pip install watchfiles
 ```
 
 Binaries are available for:
 
-* **Linux**: `manylinux-x86_64`, `musllinux-x86_64` & `manylinux-i686`
+* **Linux**: `x86_64`, `aarch64`, `i686` & `musl-aarch64`
 * **MacOS**: `x86_64` & `arm64` (except python 3.7)
 * **Windows**: `amd64` & `win32`
 
-Otherwise, you can install from source which requires Rust stable to be installed.
+### From conda-forge
+
+Using `conda` or `mamba`:
+
+```bash
+mamba install -c conda-forge watchfiles
+```
+
+Binaries are available for:
+
+* **Linux**: `x86_64`
+* **MacOS**: `x86_64`
+* **Windows**: `amd64`
+
+### From source
+
+You can also install from source which requires Rust stable to be installed.
 
 ## How Watchfiles Works
 
-*watchfiles* is based on the [Notify](https://github.com/notify-rs/notify) rust library.
+**watchfiles** is based on the [Notify](https://github.com/notify-rs/notify) rust library.
 
 All the hard work of integrating with the OS's file system events notifications and falling back to polling is palmed
 off onto the rust library.
