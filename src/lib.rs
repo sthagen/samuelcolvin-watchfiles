@@ -12,6 +12,7 @@ use pyo3::exceptions::{PyFileNotFoundError, PyRuntimeError, PyTypeError};
 use pyo3::prelude::*;
 
 use notify::event::{Event, EventKind, ModifyKind, RenameMode};
+use notify::poll::PollWatcherConfig;
 use notify::{PollWatcher, RecommendedWatcher, RecursiveMode, Result as NotifyResult, Watcher};
 
 create_exception!(
@@ -36,6 +37,7 @@ enum WatcherEnum {
 struct RustNotify {
     changes: Arc<Mutex<HashSet<(u8, String)>>>,
     error: Arc<Mutex<Option<String>>>,
+    debug: bool,
     watcher: WatcherEnum,
 }
 
@@ -124,7 +126,11 @@ impl RustNotify {
         let watcher: WatcherEnum = match force_polling {
             true => {
                 let delay = Duration::from_millis(poll_delay_ms);
-                let mut watcher = PollWatcher::with_delay(event_handler, delay).map_err(py_error)?;
+                let config = PollWatcherConfig {
+                    poll_interval: delay,
+                    compare_contents: false,
+                };
+                let mut watcher = PollWatcher::with_config(event_handler, config).map_err(py_error)?;
                 watcher_paths!(watcher, watch_paths, debug);
                 WatcherEnum::Poll(watcher)
             }
@@ -138,6 +144,7 @@ impl RustNotify {
         Ok(RustNotify {
             changes,
             error,
+            debug,
             watcher,
         })
     }
@@ -186,6 +193,9 @@ impl RustNotify {
 
             if let Some(is_set) = stop_event_is_set {
                 if is_set.call0()?.is_true()? {
+                    if self.debug {
+                        eprintln!("stop event set, stopping...");
+                    }
                     self.clear();
                     return Ok("stop".to_object(py));
                 }
