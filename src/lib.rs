@@ -67,14 +67,23 @@ fn map_watch_error(error: notify::Error) -> PyErr {
 
 // macro to avoid duplicated code below
 macro_rules! watcher_paths {
-    ($watcher:ident, $paths:ident, $debug:ident, $recursive:ident) => {
+    ($watcher:ident, $paths:ident, $debug:ident, $recursive:ident, $ignore_permission_denied:ident) => {
         let mode = if $recursive {
             RecursiveMode::Recursive
         } else {
             RecursiveMode::NonRecursive
         };
         for watch_path in $paths.into_iter() {
-            $watcher.watch(Path::new(&watch_path), mode).map_err(map_watch_error)?;
+            let result = $watcher.watch(Path::new(&watch_path), mode);
+            match result {
+                Err(err) => {
+                    let err = map_watch_error(err);
+                    if !$ignore_permission_denied {
+                        return Err(err);
+                    }
+                }
+                _ => (),
+            }
         }
         if $debug {
             eprintln!("watcher: {:?}", $watcher);
@@ -101,6 +110,7 @@ impl RustNotify {
         force_polling: bool,
         poll_delay_ms: u64,
         recursive: bool,
+        ignore_permission_denied: bool,
     ) -> PyResult<Self> {
         let changes: Arc<Mutex<HashSet<(u8, String)>>> = Arc::new(Mutex::new(HashSet::<(u8, String)>::new()));
         let error: Arc<Mutex<Option<String>>> = Arc::new(Mutex::new(None));
@@ -110,9 +120,6 @@ impl RustNotify {
 
         let event_handler = move |res: NotifyResult<Event>| match res {
             Ok(event) => {
-                if debug {
-                    eprintln!("raw-event: {:?}", event);
-                }
                 if let Some(path_buf) = event.paths.first() {
                     let path = match path_buf.to_str() {
                         Some(s) => s.to_string(),
@@ -154,9 +161,22 @@ impl RustNotify {
                             }
                         }
                         EventKind::Remove(_) => CHANGE_DELETED,
-                        _ => return,
+                        event_kind => {
+                            if debug {
+                                eprintln!(
+                                    "raw-event={:?} event.kind={:?} no change detected",
+                                    event_kind, event_kind
+                                );
+                            }
+                            return;
+                        }
                     };
+                    if debug {
+                        eprintln!("raw-event={:?} change={:?}", event, change);
+                    }
                     changes_clone.lock().unwrap().insert((change, path));
+                } else if debug {
+                    eprintln!("raw-event={:?} no paths found", event);
                 }
             }
             Err(e) => {
@@ -174,7 +194,7 @@ impl RustNotify {
                     Ok(watcher) => watcher,
                     Err(e) => return wf_error!($msg_template, e),
                 };
-                watcher_paths!(watcher, watch_paths, debug, recursive);
+                watcher_paths!(watcher, watch_paths, debug, recursive, ignore_permission_denied);
                 Ok(WatcherEnum::Poll(watcher))
             }};
         }
@@ -185,7 +205,7 @@ impl RustNotify {
                 match RecommendedWatcher::new(event_handler.clone(), NotifyConfig::default()) {
                     Ok(watcher) => {
                         let mut watcher = watcher;
-                        watcher_paths!(watcher, watch_paths, debug, recursive);
+                        watcher_paths!(watcher, watch_paths, debug, recursive, ignore_permission_denied);
                         Ok(WatcherEnum::Recommended(watcher))
                     }
                     Err(error) => {
